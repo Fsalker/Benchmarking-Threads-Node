@@ -1,23 +1,36 @@
 (async() => {
 	try{
-		let {Worker, isMainThread, workerData, threadId, parentPort} = require("worker_threads")
+			// Config
 		const ARRAY_SIZE = 50000000
-		const NUM_TESTS = 10
+		const NUM_TESTS = 5
 		const NUM_THREADS = 4
+
+			// Init
+		const NO_THREADS = "Default (no threads)"
+		const WITH_THREADS = "Threads (4 threads)"
+
+			// Require
+		let {Worker, isMainThread, workerData, threadId, parentPort} = require("worker_threads")
+
+		let log = (msg) => {
+			if(isMainThread)
+				console.log(msg)
+		}
 
 		let benchmark = async({fn, name, num_tests = 1}) => {
 			let AVG_TIME = 0
-			console.log(`	Benchmarking ${name}`)
+			log(`	Benchmarking ${name}`)
 			for(let num_test = 0; num_test < num_tests; ++num_test){
 				const TIME_START = new Date()
-				await fn()
+				if(name == WITH_THREADS || (name == NO_THREADS && isMainThread))
+					await fn()
 				const TIME_END = new Date()
 				const TIME_DIFF = (TIME_END - TIME_START)/1000
-				console.log(`Time diff = ${TIME_DIFF}`)
+				log(`Time diff = ${TIME_DIFF}`)
 				AVG_TIME += TIME_DIFF / num_tests
 			}
 			AVG_TIME = AVG_TIME.toFixed(3)
-			console.log(`	Average time taken (${num_tests} ops): ${AVG_TIME}s\n`)
+			log(`	Average time taken (${num_tests} ops): ${AVG_TIME}s\n`)
 
 			return {name, average_time: AVG_TIME}
 		}
@@ -25,7 +38,8 @@
 		let generateArray_classic = async() => {
 			return new Promise((resolve, reject) => {
 				let arr = new Array(ARRAY_SIZE).fill(Math.random())
-				resolve(arr)
+				// console.log(arr.length)
+				resolve()
 			})
 		}
 
@@ -46,8 +60,8 @@
 							chunk_size: CURR_CHUNK_SIZE,
 						}})
 						worker.on("message", (arr) => {
-							console.log(`Current length = ${resultArr.length}, amount of received elements = ${arr.length}`)
-							resultArr = resultArr.concat(arr)
+							// console.log(`Current length = ${resultArr.length}, amount of received elements = ${arr.length}`)
+							// resultArr = resultArr.concat(arr)
 						})
 						worker.on("exit", () => {
 							num_generated_elements += CURR_CHUNK_SIZE
@@ -55,6 +69,7 @@
 							// console.log(`Worker ${index} has finished!`)
 							if(num_finished_workers == NUM_THREADS) { // All threads have finished their work!
 								// console.log(`Generated ${num_generated_elements} out of ${ARRAY_SIZE} elements.`)
+								// console.log("Array length: "+resultArr.length)
 								resolve()
 							}
 						})
@@ -64,19 +79,21 @@
 
 					// console.log(`Chunk size: ${chunk_size}`)
 					let arr = new Array(chunk_size).fill(Math.random())
-					parentPort.postMessage(arr)
+					parentPort.postMessage("")
 				}
 			})
 		}
 
+		let benchmarks = []
 		if(isMainThread){
-			let benchmarks = []
 			console.log(`		Generating ${ARRAY_SIZE} elements\n`)
-			benchmarks.push(await benchmark({fn: generateArray_classic, num_tests: NUM_TESTS, name: "Default (no threads)"}))
-			benchmarks.push(await benchmark({fn: generateArray_threads, num_tests: NUM_TESTS, name: "Threads (4 threads)"}))
-			benchmarks = benchmarks.sort((a, b) => a.average_time < b.average_time ? -1 : 1)
-			console.log(`Winner: ${benchmarks[0].name}`)
+			benchmarks.push(await benchmark({fn: generateArray_classic, num_tests: NUM_TESTS, name: NO_THREADS}))
 		}
+		benchmarks.push(await benchmark({fn: generateArray_threads, num_tests: NUM_TESTS, name: WITH_THREADS}))
+		if(isMainThread){
+			benchmarks = benchmarks.sort((a, b) => a.average_time < b.average_time ? -1 : 1)
+		}
+		log(`Winner: ${benchmarks[0].name}`)
 	}catch(e){
 		console.log(e)
 	}
